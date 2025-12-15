@@ -178,3 +178,19 @@ The fundamental issues with this approach are:
 
 ## Performance on generated random tensors
 
+The first assessment of performance is performed on randomly generated tensors. We compare three approaches to computing approximate HOSVD:
+
+We perform a sweep over increasing tensor sizes, starting from $10 \times 10 \times 10$ and incrementing each dimension by 5 up to $55 \times 55 \times 55$. For each tensor size, we measure three key metrics:
+
+- **Computation Time**: Total time to compute the decomposition (all mode matrices and core tensor)
+- **Compression Factor**: Ratio of original tensor size to decomposition size, defined as:
+  $$\text{Compression} = \frac{n_1 \cdot n_2 \cdot n_3}{\text{core size} + \sum_i |\mathbf{U}^{(i)}|}$$
+  where $|\mathbf{U}^{(i)}|$ denotes the number of elements in mode matrix $i$
+- **Reconstruction Error**: Relative Frobenius norm error:
+  $$\text{Error} = \frac{\|\mathcal{X} - \hat{\mathcal{X}}\|_F}{\|\mathcal{X}\|_F}$$
+
+### Results
+
+![Performance comparison across three HOSVD methods](FULL_EXPLANATION/full_comparison_sweep.png)
+
+**Figure**: Comparison of three HOSVD approximation methods across increasing tensor sizes. Left: Computation time showing the computational efficiency of each method. Middle: Compression factor indicating how much space the decomposition requires relative to the original tensor. Right: Reconstruction error (log scale) showing the approximation quality.
