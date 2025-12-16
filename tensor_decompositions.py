@@ -16,12 +16,11 @@ def subsampled_hosvd(test_tensor, sampling_ratio, time_it=False, sv_threshold=1e
         sampled_matrix = unfolded[:, sample_indices]
         
         U, S, _ = np.linalg.svd(sampled_matrix, full_matrices=False)
+
         
-        # Truncate based on threshold: keep singular values >= sv_threshold * max(S)
-        threshold = sv_threshold * S[0]  # S[0] is the maximum singular value
+        threshold = sv_threshold * S[0]  
         rank = np.sum(S >= threshold)
-        rank = max(1, rank)  # Ensure at least one singular value is kept
-        
+        rank = max(1, rank)          
         U_truncated = U[:, :rank]
         factors_sub.append(U_truncated)
     
@@ -37,25 +36,25 @@ def subsampled_hosvd(test_tensor, sampling_ratio, time_it=False, sv_threshold=1e
         return core_sub, factors_sub, t_subsampled
     else:
         return core_sub, factors_sub
-
-def low_cost_hosvd(test_tensor, time_it=False, sv_threshold=1e-03, reduction_factor=2):
-    t_start = time.time()
-    subsampled_tensor_lc = test_tensor[:, :, ::reduction_factor]
-    factors_lc = []
+def low_cost_hosvd(test_tensor, time_it=False, sampling_fraction=0.5, mode_fraction=0.95):
+    t_start = time.time()    
     
+    first_mode_size = test_tensor.shape[0]
+    n_samples = max(1, int(first_mode_size * sampling_fraction))
+    sampled_indices = np.random.choice(first_mode_size, size=n_samples, replace=False)
+    subsampled_tensor_lc = test_tensor[sampled_indices, :, :]
+    
+    factors_lc = []
     for mode in range(test_tensor.ndim):
         unfolded = tl.unfold(subsampled_tensor_lc, mode)
         
-        if mode != test_tensor.ndim - 1:
-            U, S, _ = np.linalg.svd(unfolded, full_matrices=False)
-            
-            # Truncate based on threshold
-            threshold = sv_threshold * S[0]
-            rank = np.sum(S >= threshold)
-            rank = max(1, rank)
-            
+        if mode != 0:  
+            U, S, _ = np.linalg.svd(unfolded, full_matrices=False)            
+            total_modes = min(U.shape)
+            rank = max(1, int(total_modes * mode_fraction))
             U_truncated = U[:, :rank]
-        else:
+            
+        else:  
             U_red, S, V_red = np.linalg.svd(unfolded, full_matrices=False)
             
             Q, R = np.linalg.qr(U_red)
@@ -73,13 +72,10 @@ def low_cost_hosvd(test_tensor, time_it=False, sv_threshold=1e-03, reduction_fac
             U = non_sampled_unfolded @ V_red.T @ np.diag(1/S)
             
             Q, _ = np.linalg.qr(U)
-            U = Q
+            U = Q            
             
-            # Truncate based on threshold
-            threshold = sv_threshold * S[0]
-            rank = np.sum(S >= threshold)
-            rank = max(1, rank)
-            
+            total_modes = min(U.shape)
+            rank = max(1, int(total_modes * mode_fraction))
             U_truncated = U[:, :rank]
         
         factors_lc.append(U_truncated)
