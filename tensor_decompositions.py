@@ -36,48 +36,42 @@ def subsampled_hosvd(test_tensor, sampling_ratio, time_it=False, sv_threshold=1e
         return core_sub, factors_sub, t_subsampled
     else:
         return core_sub, factors_sub
-def low_cost_hosvd(test_tensor, time_it=False, sampling_fraction=0.5, mode_fraction=0.95):
+def low_cost_hosvd(test_tensor, time_it=False, sampling_fraction=0.5, mode_fraction=0.95, special_mode=0):
     t_start = time.time()    
-    
-    first_mode_size = test_tensor.shape[0]
-    n_samples = max(1, int(first_mode_size * sampling_fraction))
-    sampled_indices = np.random.choice(first_mode_size, size=n_samples, replace=False)
-    subsampled_tensor_lc = test_tensor[sampled_indices, :, :]
+    sampling_mode_size = test_tensor.shape[special_mode]
+    n_samples = max(1, int(sampling_mode_size * sampling_fraction))
+    sampled_indices = np.random.choice(sampling_mode_size, size=n_samples, replace=False)
+    slicing = [slice(None)] * test_tensor.ndim
+    slicing[special_mode] = sampled_indices
+    subsampled_tensor_lc = test_tensor[tuple(slicing)]
     
     factors_lc = []
+    
     for mode in range(test_tensor.ndim):
         unfolded = tl.unfold(subsampled_tensor_lc, mode)
         
-        if mode != 0:  
-            U, S, _ = np.linalg.svd(unfolded, full_matrices=False)            
+        if mode != special_mode:  
+            U, S, _ = np.linalg.svd(unfolded, full_matrices=False)
             total_modes = min(U.shape)
             rank = max(1, int(total_modes * mode_fraction))
             U_truncated = U[:, :rank]
-            
         else:  
             U_red, S, V_red = np.linalg.svd(unfolded, full_matrices=False)
-            
             Q, R = np.linalg.qr(U_red)
             U_red = U_red @ np.linalg.inv(R)
-            
             Q, R = np.linalg.qr(V_red.T)
             V_red = (V_red.T @ np.linalg.inv(R)).T
-            
             ss = U_red.T @ unfolded @ V_red.T
             ss_sign = np.sign(np.diag(ss))
             V_red = V_red.T @ np.diag(ss_sign)
             V_red = V_red.T
-            
             non_sampled_unfolded = tl.unfold(test_tensor, mode)
             U = non_sampled_unfolded @ V_red.T @ np.diag(1/S)
-            
             Q, _ = np.linalg.qr(U)
-            U = Q            
-            
+            U = Q
             total_modes = min(U.shape)
             rank = max(1, int(total_modes * mode_fraction))
             U_truncated = U[:, :rank]
-        
         factors_lc.append(U_truncated)
     
     core_lc = tl.tenalg.multi_mode_dot(
