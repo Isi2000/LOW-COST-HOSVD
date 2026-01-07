@@ -93,6 +93,59 @@ def reconstruct_tensor(core, factors):
 def compute_error(test_tensor, reconstruction):
     return np.linalg.norm(np.subtract(test_tensor, reconstruction)) / np.linalg.norm(test_tensor)
 
+def compute_error_normalized_by_species(test_tensor, reconstruction, species_axis=2):
+    """
+    Compute reconstruction error normalized by mean value per species.
+
+    Parameters:
+    -----------
+    test_tensor : ndarray
+        Original tensor
+    reconstruction : ndarray
+        Reconstructed tensor
+    species_axis : int
+        Axis corresponding to species dimension (default: 2)
+
+    Returns:
+    --------
+    overall_error : float
+        Overall normalized error
+    per_species_errors : ndarray
+        Array of normalized errors per species
+    """
+    # Compute absolute error
+    error = np.abs(test_tensor - reconstruction)
+
+    # Get number of species
+    n_species = test_tensor.shape[species_axis]
+
+    # Compute per-species errors
+    per_species_errors = np.zeros(n_species)
+
+    for species_idx in range(n_species):
+        # Extract data for this species
+        slicing = [slice(None)] * test_tensor.ndim
+        slicing[species_axis] = species_idx
+
+        species_data = test_tensor[tuple(slicing)]
+        species_error = error[tuple(slicing)]
+
+        # Compute mean value for this species
+        species_mean = np.mean(np.abs(species_data))
+
+        # Avoid division by zero
+        if species_mean > 0:
+            # Normalized error: RMSE / mean
+            species_rmse = np.sqrt(np.mean(species_error**2))
+            per_species_errors[species_idx] = species_rmse / species_mean
+        else:
+            per_species_errors[species_idx] = 0.0
+
+    # Overall error: average of per-species normalized errors
+    overall_error = np.mean(per_species_errors)
+
+    return overall_error, per_species_errors
+
 def compute_compression_factor(original_tensor, core, factors):
     original_size = original_tensor.size
     decomp_size = core.size + sum(U.size for U in factors)
